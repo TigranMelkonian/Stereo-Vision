@@ -1,0 +1,192 @@
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title> CS585 Project: Stereo Matching  </title>
+<style>
+<!--
+body{
+font-family: 'Trebuchet MS', Verdana;
+}
+p{
+font-family: 'Trebuchet MS', Times;
+margin: 10px 10px 15px 20px;
+text-indent:50px;
+}
+h3{
+margin: 5px;
+}
+h2{
+margin: 10px;
+}
+h1{
+margin: 10px 0px 0px 20px;
+}
+div.main-body{
+align:center;
+margin: 30px;
+}
+hr{
+margin:20px 0px 20px 0px;
+}
+-->
+</style>
+<style type="text/css">span[data-cmchighlight=''] {padding:0px!important;margin:0px!important;display:inline!important;float:none!important;position:static!important;-webkit-print-color-adjust:exact!important}</style><style type="text/css">.cmcredaction {color:#D3D3D3!important;background:#D3D3D3!important;-webkit-user-select:none!important;-khtml-user-select:none !important;-moz-user-select:none!important;-ms-user-select:none!important;-o-user-select:none!important;user-select:none!important;-webkit-print-color-adjust:exact!important}</style></head>
+
+<body style="zoom: 1;">
+<center>
+<a href="http://www.bu.edu/"><img border="0" src="./cs585_ivc_project_materials/bu-logo.gif" width="119" height="120"></a>
+</center>
+
+<h1>CS585 IVC Project: Stereo Matching</h1>
+<h4>
+	<p>
+	CS 585 IVC Project P2
+	</p>
+</h4>
+
+<h4>
+	<p>
+	Tigran Melkonian, Mingrui Yang, Wei Jiang
+</p>
+</h4>
+
+<h4>
+	<p>
+	2017-11-07
+</p>
+</h4>
+
+<div class="main-body">
+<hr>
+<h2> Problem Definition </h2>
+<p>
+  Stereo matching, the extraction of depth information from digital images, is one of the most heavily investigated topics in computer vision with many applications in entertainment, object recognition,information transfer, and automated systems. In this project, we want to implement a stereo matching algorithm. The baseline approach is through the traditional block matching algorithm. Our goal is to explore an improved method for detecting objects in stereo images and calculating a more accurate correspondence between two images. We plan on initially utilizing the middlebury dataset, of two-frame stereo images, because it provides us high quality ground truth images and calibration data. Additionally, we plan on exploring filtering methods for both de-noising and hole-filling in depth maps. To challenge ourselves, we want to extend the algorithm to non-parallel camera settings for example the bats over the lake.  
+</p>
+
+    
+
+<hr>
+<h2> Dataset and Desired Results</h2>
+<h4>
+	<p>
+	We get our datasets from the website: 
+	<a href="http://vision.middlebury.edu/stereo/">
+	http://vision.middlebury.edu/stereo/
+	</a>
+	</p>
+</h4>
+
+<p>
+<h3> 1. Middlebury dataset </h3>
+</p>
+<p>
+    Left view: </br>
+<img src="./cs585_ivc_project_materials/dataset/left_view.png", style="width:60%; height:auto"> </br>
+</p>
+<p>
+    Right view: </br>
+<img src="./cs585_ivc_project_materials/dataset/right_view.png", style="width:60%; height:auto"> </br>
+</p>
+<p>
+<h3> 2. Desired results </h3>
+</p>
+<p>
+    Left view ground truth: </br>
+<img src="./cs585_ivc_project_materials/dataset/left_depth.png", style="width:60%; height:auto"> </br>
+</p>
+<p>
+    Right view ground truth: </br>
+<img src="./cs585_ivc_project_materials/dataset/right_depth.png", style="width:60%; height:auto"> </br>
+</p>
+
+
+
+    
+<hr>
+<h2> Background Research and Methods</h2>
+<p>
+</p>
+<h3> 
+	<p><i><u>
+	Step 1. Read stereo image pair 
+	</u></i></p>
+</h3>
+<p>
+	For this step we will read in the color stereo image pair and convert the images to grayscale for the matching process. Using color images may provide some improvement in accuracy, but it is more efficient to work with only one­channel images. For this we will use the <i>ImageDataTypeConverter</i> and the <i>ColorSpaceConverter</i> System objects.
+</p>
+
+<h3> 
+	<p><i><u>
+	Step 2. Basic block matching 
+	</u></i></p>
+</h3>
+<p>
+	Next we will perform basic block matching. For every pixel in the right image, we extract the 7­-by­-7 ­pixel block around it and search along the same row in the left image for the block that best matches it. Here we search in a range of &plusmn15 pixels around the pixel's location in the first image, and we use the sum of absolute differences (SAD) to compare the image regions. We need only search over columns and not over rows because the images are rectified. We will use the <i>TemplateMatcher</i> System object to perform this block matching between each block and the region of interest.</br>
+</p>
+<p>
+Disparity map from basic block matching:</br>
+Using search range 50 and block size 7.</br>
+<img src="./cs585_ivc_project_materials/dataset/basic_blockmatching.png", style="width:60%; height:auto"> </br>
+</p>
+<p>
+	There could be noisy patches and bad depth estimates everywhere, especially on the ceiling. These are caused when no strong image features appear inside of the 7­-by-­7 ­pixel windows being compared. Then the matching process is subject to noise since each pixel chooses its disparity independently of all the other pixels.
+</p>
+<p>
+	For display purposes, we saturate the depth map to have only positive values. In general, slight angular misalignment of the stereo cameras used for image acquisition can allow both positive and negative disparities to appear validly in the depth map. In this case, however, the stereo cameras were near perfectly parallel, so the true disparities have only one sign. Thus this correction is valid.
+</p>
+
+<h3> 
+	<p><i><u>
+	Step 3. Sub­pixel estimation 
+	</u></i></p>
+</h3>
+<p>
+	The disparity estimates returned by block matching are all integer­valued, so the above depth map exhibits contouring effects where there are no smooth transitions between regions of different disparity. This can be ameliorated by incorporating sub­pixel computation into the matching metric. Previously we only took the location of the minimum cost as the disparity, but now we take into consideration the minimum cost and the two neighboring cost values. We fit a parabola to these three values, and analytically solve for the minimum to get the sub­ pixel correction.
+</p>
+
+<h3> 
+	<p><i><u>
+	Step 4. Dynamic programming 
+	</u></i></p>
+</h3>
+<p>
+	As mentioned above, basic block matching creates a noisy disparity image. This can be improved by introducing a smoothness constraint. Basic block matching chooses the optimal disparity for each pixel based on its own cost function alone. Now we want to allow a pixel to have a disparity with possibly sub­optimal cost for it locally. This extra cost must be offset by increasing that pixel's agreement in disparity with its neighbors. In particular, we constrain each disparity estimate to lie with &plusmn3 values of its neighbors' disparities, where its neighbors are the adjacent pixels along an image row. The problem of finding the optimal disparity estimates for a row of pixels now becomes one of finding the "optimal path" from one side of the image to the other. To find this optimal path, we use the underlying block matching metric as the cost function and constrain the disparities to only change by a certain amount between adjacent pixels. This is a problem that can be solved efficiently using the technique of dynamic programming.
+</p>
+
+<h3> 
+	<p><i><u>
+	Step 5. Image Pyramiding 
+	</u></i></p>
+</h3>
+<p>
+	While dynamic programming can improve the accuracy of the stereo image, basic block matching is still an expensive operation, and dynamic programming only adds to the burden. One solution is to use image pyramiding and telescopic search to guide the block matching. With the full­size image, we had to search over a &plusmn15-­pixel range to properly detect the disparities in the image. If we had down­sized the image by a factor of two, however, this search could have been reduced to &plusmn7 pixels on an image a quarter of the area, meaning this step would cost a factor of 8 less. Then we use the disparity estimates from this down­sized operation to seed the search on the larger image, and therefore we only need to search over a smaller range of disparities.
+</p>
+
+<h3> 
+	<p><i><u>
+	Step 6. Combined pyramiding and dynamic programming
+	</u></i></p>
+</h3>
+<p>
+	Finally we will merge the above techniques and run dynamic programming along with image pyramiding, where the dynamic programming is run on the disparity estimates output by every pyramid level. The results compare well with the highest­quality results we have obtained so far, and are still achieved at a reduced computational burden versus basic block matching.
+</p>
+<p>
+	It is also possible to use sub­-pixel methods with dynamic programming. As before, sub­-pixeling reduces contouring effects and clearly improves accuracy.
+</p>
+
+
+
+
+
+
+
+<hr>
+<h2> Credits and Bibliography </h2>
+
+<p>
+Teammates: Tigran Melkonian, Mingrui Yang, Wei Jiang.<br />
+ <br />
+</p>
+<hr>
+</div>
+
+
+</body></html>
